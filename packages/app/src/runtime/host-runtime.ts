@@ -36,6 +36,8 @@ import {
   buildLocalDaemonTransportUrl,
   createDesktopLocalDaemonTransportFactory,
 } from "@/desktop/daemon/desktop-daemon-transport";
+import { getDesktopHost } from "@/desktop/host";
+import { CLIENT_CAPS } from "@getpaseo/protocol/client-capabilities";
 import { replaceFetchedAgentDirectory } from "@/utils/agent-directory-sync";
 import { useSessionStore } from "@/stores/session-store";
 
@@ -455,12 +457,22 @@ function createDefaultDeps(): HostRuntimeControllerDeps {
   return {
     createClient: ({ host, connection, clientId, runtimeGeneration }) => {
       const localTransportFactory = createDesktopLocalDaemonTransportFactory();
+      const desktopBrowserAutomationAvailable =
+        typeof getDesktopHost()?.browser?.executeAutomationCommand === "function";
       const base = {
         suppressSendErrors: true,
         clientId,
         clientType: "mobile" as const,
         appVersion: resolveAppVersion() ?? undefined,
         runtimeGeneration,
+        ...(desktopBrowserAutomationAvailable
+          ? {
+              capabilities: {
+                [CLIENT_CAPS.desktopBrowserAutomation]: true,
+                [CLIENT_CAPS.desktopBrowserInteractionAutomation]: true,
+              },
+            }
+          : {}),
       };
       if (connection.type === "directSocket" || connection.type === "directPipe") {
         return new DaemonClient({
@@ -1287,12 +1299,13 @@ export class HostRuntimeStore {
       return;
     }
 
-    if (shouldUseDesktopDaemon()) {
+    if (override) {
+      this.bootstrapConfiguredOverride(override);
       return;
     }
 
-    if (override) {
-      this.bootstrapConfiguredOverride(override);
+    if (shouldUseDesktopDaemon()) {
+      return;
     } else {
       await this.bootstrapDefaultLocalhost();
     }

@@ -43,6 +43,10 @@ In any worktree-style or portless setup, never assume default ports.
 `http://127.0.0.1:9223` so renderer CPU profiles can be captured through CDP.
 Override the port with `PASEO_ELECTRON_REMOTE_DEBUGGING_PORT` when `9223` is busy.
 
+When running a dedicated Electron QA instance against a non-default Expo port, set
+`EXPO_DEV_URL` explicitly. Desktop main defaults to `http://localhost:8081`, so
+`PASEO_PORT=57928` alone starts Metro on 57928 but Electron still loads 8081.
+
 ### React render profiling
 
 The app has a gated React render profiler in

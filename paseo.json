@@ -15,6 +15,10 @@
       "type": "service",
       "command": "cd packages/app && BROWSER=none EXPO_PUBLIC_LOCAL_DAEMON=\"localhost:${PASEO_SERVICE_DAEMON_PORT}\" npx expo start --port $PASEO_PORT"
     },
+    "desktop": {
+      "type": "service",
+      "command": "npm run build:main --workspace=@getpaseo/desktop && PASEO_CORS_ORIGINS=\"*\" EXPO_PUBLIC_LOCAL_DAEMON=\"localhost:${PASEO_SERVICE_DAEMON_PORT}\" PASEO_WEB_PLATFORM=electron npx concurrently --kill-others --names \"metro,electron\" --prefix-colors \"magenta,cyan\" \"BROWSER=none npm run start:expo --workspace=@getpaseo/app -- --port $PASEO_PORT\" \"npx wait-on tcp:$PASEO_PORT && EXPO_DEV_URL=http://localhost:$PASEO_PORT electron packages/desktop\""
+    },
     "typecheck": {
       "command": "npm run typecheck"
     }

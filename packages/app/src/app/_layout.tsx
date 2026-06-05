@@ -292,6 +292,9 @@ async function shouldStartBuiltInDaemon(): Promise<boolean> {
   if (!shouldUseDesktopDaemon()) {
     return false;
   }
+  if (hasConfiguredLocalDaemonOverride()) {
+    return false;
+  }
   const settings = await loadDesktopSettings();
   return settings.daemon.manageBuiltInDaemon;
 }
@@ -311,8 +314,7 @@ function HostRuntimeBootstrapProvider({ children }: { children: ReactNode }) {
   const anyOnlineHostServerId = useEarliestOnlineHostServerId();
   const daemonStartError = useDaemonStartLastError();
   const daemonStartIsRunning = useDaemonStartIsRunning();
-  const waitForConfiguredLocalDaemon =
-    hasConfiguredLocalDaemonOverride() && !shouldUseDesktopDaemon();
+  const waitForConfiguredLocalDaemon = hasConfiguredLocalDaemonOverride();
 
   const [hasGivenUpWaitingForHost, setHasGivenUpWaitingForHost] = useState(false);
   useEffect(() => {

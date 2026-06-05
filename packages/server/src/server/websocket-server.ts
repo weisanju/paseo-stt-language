@@ -55,6 +55,9 @@ import {
   WebSocketRuntimeMetricsWindow,
   type WebSocketRuntimeCounters,
 } from "./websocket/runtime-metrics.js";
+import { CLIENT_CAPS } from "@getpaseo/protocol/client-capabilities";
+import type { BrowserAutomationExecuteResponse } from "@getpaseo/protocol/browser-automation/rpc-schemas";
+import type { BrowserToolsBroker } from "./browser-tools/index.js";
 
 const WS_CLOSE_DAEMON_AUTH_FAILED = 4401;
 
@@ -251,6 +254,18 @@ function bufferFromWsData(data: Buffer | ArrayBuffer | Buffer[] | string): Buffe
   return Buffer.from(data);
 }
 
+function hasDesktopBrowserAutomationCapability(
+  capabilities: Record<string, unknown> | null,
+): boolean {
+  return capabilities?.[CLIENT_CAPS.desktopBrowserAutomation] === true;
+}
+
+function hasDesktopBrowserInteractionAutomationCapability(
+  capabilities: Record<string, unknown> | null,
+): boolean {
+  return capabilities?.[CLIENT_CAPS.desktopBrowserInteractionAutomation] === true;
+}
+
 interface WebSocketLike {
   readyState: number;
   bufferedAmount?: number;
@@ -268,6 +283,10 @@ interface SessionConnection {
   connectionLogger: pino.Logger;
   sockets: Set<WebSocketLike>;
   externalDisconnectCleanupTimeout: ReturnType<typeof setTimeout> | null;
+}
+
+interface BrowserToolsRegistration {
+  unregister: () => void;
 }
 
 const SLOW_REQUEST_THRESHOLD_MS = 500;
@@ -379,6 +398,8 @@ export class VoiceAssistantWebSocketServer {
   private runtimeMetricsInterval: ReturnType<typeof setInterval> | null = null;
   private unsubscribeSpeechReadiness: (() => void) | null = null;
   private unsubscribeDaemonConfigChange: (() => void) | null = null;
+  private readonly browserToolsBroker: BrowserToolsBroker | null;
+  private readonly browserToolsRegistrations = new Map<string, BrowserToolsRegistration>();
 
   constructor(
     server: HTTPServer,
@@ -431,6 +452,7 @@ export class VoiceAssistantWebSocketServer {
       };
     },
     serviceProxyPublicBaseUrl?: string | null,
+    browserToolsBroker?: BrowserToolsBroker | null,
   ) {
     this.logger = logger.child({ module: "websocket-server" });
     this.serverId = serverId;
@@ -439,6 +461,7 @@ export class VoiceAssistantWebSocketServer {
     }
     this.daemonVersion = daemonVersion.trim();
     this.daemonRuntimeConfig = daemonRuntimeConfig;
+    this.browserToolsBroker = browserToolsBroker ?? null;
     this.agentManager = agentManager;
     this.agentStorage = agentStorage;
     this.projectRegistry = projectRegistry ?? createNoopProjectRegistry();
@@ -733,6 +756,9 @@ export class VoiceAssistantWebSocketServer {
     this.pendingConnections.clear();
     this.sessions.clear();
     this.externalSessionsByKey.clear();
+    for (const clientId of this.browserToolsRegistrations.keys()) {
+      this.unregisterBrowserToolsClient(clientId);
+    }
     this.wss.close();
   }
 
@@ -1004,9 +1030,11 @@ export class VoiceAssistantWebSocketServer {
       ) {
         existing.clientCapabilities = newClientCapabilities;
         existing.session.updateClientCapabilities(newClientCapabilities);
+        this.syncBrowserToolsClientRegistration(existing);
       }
       existing.sockets.add(ws);
       this.sessions.set(ws, existing);
+      this.syncBrowserToolsClientRegistration(existing);
       this.sendToClient(ws, this.createServerInfoMessage());
       existing.connectionLogger.trace(
         {
@@ -1030,6 +1058,7 @@ export class VoiceAssistantWebSocketServer {
     });
     this.sessions.set(ws, connection);
     this.externalSessionsByKey.set(clientId, connection);
+    this.syncBrowserToolsClientRegistration(connection);
     this.sendToClient(ws, this.createServerInfoMessage());
     connection.connectionLogger.trace(
       {
@@ -1157,6 +1186,7 @@ export class VoiceAssistantWebSocketServer {
     connection.sockets.delete(ws);
 
     if (connection.sockets.size === 0) {
+      this.unregisterBrowserToolsClient(connection.clientId);
       this.incrementRuntimeCounter("sessionDisconnectedWaitingReconnect");
       if (connection.externalDisconnectCleanupTimeout) {
         clearTimeout(connection.externalDisconnectCleanupTimeout);
@@ -1217,12 +1247,46 @@ export class VoiceAssistantWebSocketServer {
     if (existing === connection) {
       this.externalSessionsByKey.delete(connection.clientId);
     }
+    this.unregisterBrowserToolsClient(connection.clientId);
 
     connection.connectionLogger.trace(
       { clientId: connection.clientId, totalSessions: this.sessions.size },
       logMessage,
     );
     await connection.session.cleanup();
+  }
+
+  private syncBrowserToolsClientRegistration(connection: SessionConnection): void {
+    if (!this.browserToolsBroker) {
+      return;
+    }
+    if (!hasDesktopBrowserAutomationCapability(connection.clientCapabilities)) {
+      this.unregisterBrowserToolsClient(connection.clientId);
+      return;
+    }
+    if (this.browserToolsRegistrations.has(connection.clientId)) {
+      return;
+    }
+
+    const unregister = this.browserToolsBroker.registerClient({
+      id: connection.clientId,
+      supportsInteractionAutomation: hasDesktopBrowserInteractionAutomationCapability(
+        connection.clientCapabilities,
+      ),
+      sendBrowserAutomationRequest: (request) => {
+        this.sendToConnection(connection, wrapSessionMessage(request));
+      },
+    });
+    this.browserToolsRegistrations.set(connection.clientId, { unregister });
+  }
+
+  private unregisterBrowserToolsClient(clientId: string): void {
+    const registration = this.browserToolsRegistrations.get(clientId);
+    if (!registration) {
+      return;
+    }
+    this.browserToolsRegistrations.delete(clientId);
+    registration.unregister();
   }
 
   private handleInvalidInboundMessage(args: {
@@ -1444,6 +1508,11 @@ export class VoiceAssistantWebSocketServer {
     message: Extract<WSInboundMessage, { type: "session" }>,
   ): Promise<void> {
     this.recordInboundSessionRequestType(message.message.type);
+    if (message.message.type === "browser.automation.execute.response") {
+      this.browserToolsBroker?.receiveResponse(message.message as BrowserAutomationExecuteResponse);
+      return;
+    }
+
     const startMs = performance.now();
     await activeConnection.session.handleMessage(message.message);
     const durationMs = performance.now() - startMs;

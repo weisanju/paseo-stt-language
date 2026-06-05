@@ -28,6 +28,7 @@ import type { HostConnection, HostProfile } from "@/types/host-connection";
 import { confirmDialog } from "@/utils/confirm-dialog";
 import { formatConnectionStatus, getConnectionStatusTone } from "@/utils/daemons";
 import { formatLatency } from "@/utils/latency";
+import { BrowserToolsOptInCard } from "./browser-tools-card";
 
 const RESTART_CONFIRMATION_MESSAGE =
   "This will restart the daemon. Agents running on it will keep going; the app will reconnect automatically.";
@@ -201,6 +202,7 @@ export function HostOrchestrationPage({ serverId }: { serverId: string }) {
       {isConnected ? (
         <SettingsSection title="Orchestration">
           <InjectPaseoToolsCard serverId={serverId} />
+          <BrowserToolsOptInCard serverId={serverId} />
           <AppendSystemPromptCard serverId={serverId} />
         </SettingsSection>
       ) : (

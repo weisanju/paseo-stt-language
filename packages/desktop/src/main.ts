@@ -49,6 +49,7 @@ import {
   getPaseoBrowserIdForWebContents,
   getPaseoBrowserWebContents,
   listRegisteredPaseoBrowserIds,
+  registerPaseoBrowserWorkspace,
   registerPaseoBrowserWebContents,
   setWorkspaceActivePaseoBrowserId,
 } from "./features/browser-webviews.js";
@@ -65,6 +66,7 @@ import {
 } from "./daemon/quit-lifecycle.js";
 import { runDesktopStartup } from "./desktop-startup.js";
 import { autoUpdateInstalledSkills } from "./integrations/skills/index.js";
+import { registerBrowserAutomationIpc } from "./features/browser-automation/ipc.js";
 
 const DEV_SERVER_URL = process.env.EXPO_DEV_URL ?? "http://localhost:8081";
 const APP_SCHEME = "paseo";
@@ -134,6 +136,36 @@ function getBrowserIdFromWebviewPartition(partition: string | undefined): string
   }
   const browserId = partition.slice(prefix.length).trim();
   return browserId.length > 0 ? browserId : null;
+}
+
+function readBrowserWorkspaceInput(
+  input: unknown,
+): { browserId: string; workspaceId: string } | null {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    return null;
+  }
+  const record = input as Record<string, unknown>;
+  if (typeof record.browserId !== "string" || record.browserId.trim().length === 0) {
+    return null;
+  }
+  if (typeof record.workspaceId !== "string" || record.workspaceId.trim().length === 0) {
+    return null;
+  }
+  return { browserId: record.browserId.trim(), workspaceId: record.workspaceId.trim() };
+}
+
+function readActiveBrowserInput(
+  input: unknown,
+): { workspaceId: string; browserId: string | null } | null {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) {
+    return null;
+  }
+  const record = input as Record<string, unknown>;
+  if (typeof record.workspaceId !== "string" || record.workspaceId.trim().length === 0) {
+    return null;
+  }
+  const browserId = typeof record.browserId === "string" ? record.browserId.trim() : null;
+  return { workspaceId: record.workspaceId.trim(), browserId: browserId || null };
 }
 
 const pendingBrowserWebviewIds: string[] = [];
@@ -272,8 +304,18 @@ ipcMain.handle("paseo:get-pending-open-project", () => {
   return result;
 });
 
-ipcMain.handle("paseo:browser:set-workspace-active-browser", (_event, browserId: unknown) => {
-  setWorkspaceActivePaseoBrowserId(typeof browserId === "string" ? browserId : null);
+ipcMain.handle("paseo:browser:register-workspace-browser", (_event, rawInput: unknown) => {
+  const input = readBrowserWorkspaceInput(rawInput);
+  if (input) {
+    registerPaseoBrowserWorkspace(input);
+  }
+});
+
+ipcMain.handle("paseo:browser:set-workspace-active-browser", (_event, rawInput: unknown) => {
+  const input = readActiveBrowserInput(rawInput);
+  if (input) {
+    setWorkspaceActivePaseoBrowserId(input);
+  }
 });
 
 ipcMain.handle("paseo:browser:open-devtools", (_event, browserId: unknown) => {
@@ -700,6 +742,7 @@ async function bootstrap(): Promise<void> {
   registerNotificationHandlers();
   registerOpenerHandlers();
   registerEditorTargetHandlers();
+  registerBrowserAutomationIpc();
 
   await createMainWindow();
 

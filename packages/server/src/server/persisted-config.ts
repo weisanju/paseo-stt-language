@@ -219,6 +219,12 @@ export const PersistedConfigSchema = z
           })
           .passthrough()
           .optional(),
+        browserTools: z
+          .object({
+            enabled: z.boolean().optional(),
+          })
+          .passthrough()
+          .optional(),
         autoArchiveAfterMerge: z.boolean().optional(),
         appendSystemPrompt: z.string().optional(),
         cors: z

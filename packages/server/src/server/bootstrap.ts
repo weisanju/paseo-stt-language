@@ -108,6 +108,7 @@ import { CheckoutDiffManager } from "./checkout-diff-manager.js";
 import { LoopService } from "./loop-service.js";
 import { ScheduleService } from "./schedule/service.js";
 import { DaemonConfigStore } from "./daemon-config-store.js";
+import { BrowserToolsBroker, DaemonConfigBrowserToolsPolicy } from "./browser-tools/index.js";
 import { WorkspaceGitServiceImpl } from "./workspace-git-service.js";
 import { archivePersistedWorkspaceRecord } from "./workspace-archive-service.js";
 import { setupAutoArchiveOnMerge } from "./auto-archive-on-merge/index.js";
@@ -233,6 +234,7 @@ export interface PaseoDaemonConfig {
   hostnames?: HostnamesConfig;
   mcpEnabled?: boolean;
   mcpInjectIntoAgents?: boolean;
+  browserToolsEnabled?: boolean;
   autoArchiveAfterMerge?: boolean;
   appendSystemPrompt?: string;
   staticDir: string;
@@ -279,6 +281,7 @@ export interface PaseoDaemon {
   terminalManager: TerminalManager;
   serviceProxy: ServiceProxySubsystem;
   scriptRuntimeStore: WorkspaceScriptRuntimeStore;
+  browserToolsBroker: BrowserToolsBroker;
   start(): Promise<void>;
   stop(): Promise<void>;
   getListenTarget(): ListenTarget | null;
@@ -296,6 +299,7 @@ export async function createPaseoDaemon(
     config.paseoHome,
     {
       mcp: { injectIntoAgents: config.mcpInjectIntoAgents ?? true },
+      browserTools: { enabled: config.browserToolsEnabled ?? false },
       providers: Object.fromEntries(
         Object.entries(config.providerOverrides ?? {}).map(([providerId, override]) => [
           providerId,
@@ -313,6 +317,9 @@ export async function createPaseoDaemon(
     },
     logger,
   );
+  const browserToolsBroker = new BrowserToolsBroker({
+    policy: new DaemonConfigBrowserToolsPolicy(daemonConfigStore),
+  });
 
   const serverId = getOrCreateServerId(config.paseoHome, { logger });
   const daemonKeyPair = await loadOrCreateDaemonKeyPair(config.paseoHome, logger);
@@ -755,6 +762,7 @@ export async function createPaseoDaemon(
         paseoHome: config.paseoHome,
         worktreesRoot: config.worktreesRoot,
         callerAgentId,
+        browserToolsBroker,
         enableVoiceTools: false,
         resolveSpeakHandler: (agentId) => wsServer?.resolveVoiceSpeakHandler(agentId) ?? null,
         resolveCallerContext: (agentId) => wsServer?.resolveVoiceCallerContext(agentId) ?? null,
@@ -1007,6 +1015,7 @@ export async function createPaseoDaemon(
                 },
               },
               serviceProxyPublicBaseUrl,
+              browserToolsBroker,
             );
 
             if (relayEnabled) {
@@ -1106,6 +1115,7 @@ export async function createPaseoDaemon(
     terminalManager,
     serviceProxy,
     scriptRuntimeStore,
+    browserToolsBroker,
     start,
     stop,
     getListenTarget: () => boundListenTarget,

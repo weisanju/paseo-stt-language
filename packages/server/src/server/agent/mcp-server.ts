@@ -80,6 +80,8 @@ import {
   type CreatePaseoWorktreeCommandInput,
   listPaseoWorktreesCommand,
 } from "../worktree/commands.js";
+import { registerBrowserTools } from "../browser-tools/mcp-tools.js";
+import type { BrowserToolsBroker } from "../browser-tools/index.js";
 
 export interface AgentMcpServerOptions {
   agentManager: AgentManager;
@@ -113,6 +115,7 @@ export interface AgentMcpServerOptions {
   resolveCallerContext?: (callerAgentId: string) => VoiceCallerContext | null;
   enableVoiceTools?: boolean;
   voiceOnly?: boolean;
+  browserToolsBroker?: BrowserToolsBroker | null;
   logger: Logger;
 }
 
@@ -873,6 +876,15 @@ export async function createAgentMcpServer(options: AgentMcpServerOptions): Prom
 
   if (options.voiceOnly) {
     return server;
+  }
+
+  if (options.browserToolsBroker) {
+    registerBrowserTools({
+      registerTool,
+      broker: options.browserToolsBroker,
+      callerAgentId,
+      resolveCallerAgent,
+    });
   }
 
   registerTool(
