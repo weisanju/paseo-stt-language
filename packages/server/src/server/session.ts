@@ -864,6 +864,7 @@ export class Session {
   } | null = null;
   private readonly terminalManager: TerminalManager | null;
   private readonly providerSnapshotManager: ProviderSnapshotManager;
+  private paseoAgentConfigService: PaseoAgentConfigService | null = null;
   private unsubscribeProviderSnapshotEvents: (() => void) | null = null;
   private readonly serviceProxy: ServiceProxySubsystem | null;
   private readonly scriptRuntimeStore: WorkspaceScriptRuntimeStore | null;
@@ -4145,7 +4146,7 @@ export class Session {
   }
 
   private createPaseoAgentConfigService(): PaseoAgentConfigService {
-    return new PaseoAgentConfigService({
+    this.paseoAgentConfigService ??= new PaseoAgentConfigService({
       paseoHome: this.paseoHome,
       logger: this.sessionLogger,
       onConfigChanged: (config) => {
@@ -4153,6 +4154,7 @@ export class Session {
         this.agentManager.updateProviderRegistry(state);
       },
     });
+    return this.paseoAgentConfigService;
   }
 
   private async refreshPaseoAgentRuntimeSnapshot(): Promise<void> {
