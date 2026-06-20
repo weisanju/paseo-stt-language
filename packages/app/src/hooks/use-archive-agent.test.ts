@@ -145,7 +145,14 @@ describe("useArchiveAgent", () => {
       pageParams: [null],
     });
     queryClient.setQueryData(allAgentHistoryQueryKey(["server-a", "server-b"]), {
-      pages: [{ agents: [{ id: "agent-1", archivedAt: null }] }],
+      pages: [
+        {
+          agents: [
+            { id: "agent-1", serverId: "server-a", archivedAt: null },
+            { id: "agent-1", serverId: "server-b", archivedAt: null },
+          ],
+        },
+      ],
       pageParams: [null],
     });
 
@@ -181,6 +188,21 @@ describe("useArchiveAgent", () => {
     expect(
       queryClient.getQueryState(allAgentHistoryQueryKey(["server-a", "server-b"]))?.isInvalidated,
     ).toBe(true);
+    expect(queryClient.getQueryData(allAgentHistoryQueryKey(["server-a", "server-b"]))).toEqual({
+      pages: [
+        {
+          agents: [
+            {
+              id: "agent-1",
+              serverId: "server-a",
+              archivedAt: new Date("2026-04-01T04:00:00.000Z"),
+            },
+            { id: "agent-1", serverId: "server-b", archivedAt: null },
+          ],
+        },
+      ],
+      pageParams: [null],
+    });
   });
 
   it("can apply archived agent close results without invalidating cached lists", () => {
@@ -202,7 +224,7 @@ describe("useArchiveAgent", () => {
       pageParams: [null],
     });
     queryClient.setQueryData(allAgentHistoryQueryKey(["server-a"]), {
-      pages: [{ agents: [{ id: "agent-1", archivedAt: null }] }],
+      pages: [{ agents: [{ id: "agent-1", serverId: "server-a", archivedAt: null }] }],
       pageParams: [null],
     });
 
@@ -223,6 +245,20 @@ describe("useArchiveAgent", () => {
       pages: [
         {
           agents: [{ id: "agent-1", archivedAt: new Date("2026-04-01T04:00:00.000Z") }],
+        },
+      ],
+      pageParams: [null],
+    });
+    expect(queryClient.getQueryData(allAgentHistoryQueryKey(["server-a"]))).toEqual({
+      pages: [
+        {
+          agents: [
+            {
+              id: "agent-1",
+              serverId: "server-a",
+              archivedAt: new Date("2026-04-01T04:00:00.000Z"),
+            },
+          ],
         },
       ],
       pageParams: [null],
