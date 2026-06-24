@@ -977,6 +977,69 @@ function NewWorktreeButton({
   );
 }
 
+function NewWorkspaceGhostRow({
+  project,
+  displayName,
+  worktreeTarget,
+  onWorkspacePress,
+}: {
+  project: SidebarProjectEntry;
+  displayName: string;
+  worktreeTarget: SidebarProjectHostTarget;
+  onWorkspacePress?: () => void;
+}) {
+  const { t } = useTranslation();
+  const handlePress = useCallback(() => {
+    onWorkspacePress?.();
+    router.navigate(
+      buildHostNewWorkspaceRoute(worktreeTarget.serverId, worktreeTarget.iconWorkingDir, {
+        displayName,
+        projectId: project.projectKey,
+      }) as Href,
+    );
+  }, [displayName, onWorkspacePress, project.projectKey, worktreeTarget]);
+  const rowStyle = useCallback(
+    ({ hovered = false, pressed }: PressableStateCallbackType & { hovered?: boolean }) => [
+      styles.newWorkspaceGhostRow,
+      (Boolean(hovered) || pressed) && styles.newWorkspaceGhostRowHovered,
+    ],
+    [],
+  );
+
+  return (
+    <Pressable
+      accessibilityRole={platformIsWeb ? undefined : "button"}
+      accessibilityLabel={t("sidebar.workspace.actions.createWorkspaceFor", {
+        projectName: displayName,
+      })}
+      onPress={handlePress}
+      style={rowStyle}
+      testID={`sidebar-project-new-workspace-row-${project.projectKey}`}
+    >
+      {({ hovered, pressed }) => (
+        <>
+          <View style={styles.newWorkspaceGhostIconSlot}>
+            <ThemedPlus
+              size={14}
+              uniProps={hovered || pressed ? foregroundColorMapping : foregroundMutedColorMapping}
+            />
+          </View>
+          <Text
+            style={
+              hovered || pressed
+                ? styles.newWorkspaceGhostTextHovered
+                : styles.newWorkspaceGhostText
+            }
+            numberOfLines={1}
+          >
+            {t("sidebar.workspace.actions.newWorkspace")}
+          </Text>
+        </>
+      )}
+    </Pressable>
+  );
+}
+
 function useLongPressDragInteraction(input: {
   drag: () => void;
   menuController: ReturnType<typeof useContextMenu> | null;
@@ -1976,6 +2039,36 @@ function ProjectBlock({
     onToggleCollapsed(project.projectKey);
   }, [onToggleCollapsed, project.projectKey]);
 
+  let projectChildren = null;
+  if (!collapsed) {
+    if (project.workspaces.length > 0) {
+      projectChildren = (
+        <DraggableList
+          testID={`sidebar-workspace-list-${project.projectKey}`}
+          data={project.workspaces}
+          keyExtractor={workspaceKeyExtractor}
+          renderItem={renderWorkspace}
+          onDragEnd={handleWorkspaceDragEnd}
+          extraData={activeWorkspaceSelectionKey(activeWorkspaceSelection)}
+          scrollEnabled={false}
+          useDragHandle
+          nestable={useNestable}
+          simultaneousGestureRef={parentGestureRef}
+          containerStyle={styles.workspaceListContainer}
+        />
+      );
+    } else if (rowModel.trailingAction.kind === "new_worktree") {
+      projectChildren = (
+        <NewWorkspaceGhostRow
+          project={project}
+          displayName={displayName}
+          worktreeTarget={rowModel.trailingAction.target}
+          onWorkspacePress={onWorkspacePress}
+        />
+      );
+    }
+  }
+
   return (
     <View style={styles.projectBlock}>
       <ProjectHeaderRow
@@ -2001,21 +2094,7 @@ function ProjectBlock({
         dragHandleProps={dragHandleProps}
       />
 
-      {!collapsed && project.workspaces.length > 0 ? (
-        <DraggableList
-          testID={`sidebar-workspace-list-${project.projectKey}`}
-          data={project.workspaces}
-          keyExtractor={workspaceKeyExtractor}
-          renderItem={renderWorkspace}
-          onDragEnd={handleWorkspaceDragEnd}
-          extraData={activeWorkspaceSelectionKey(activeWorkspaceSelection)}
-          scrollEnabled={false}
-          useDragHandle
-          nestable={useNestable}
-          simultaneousGestureRef={parentGestureRef}
-          containerStyle={styles.workspaceListContainer}
-        />
-      ) : null}
+      {projectChildren}
     </View>
   );
 }
@@ -2377,7 +2456,9 @@ function ProjectModeList({
     <>
       {projects.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyTitle}>{t("sidebar.project.empty.title")}</Text>
+          <Text style={styles.emptyTitle} testID="sidebar-project-empty-state">
+            {t("sidebar.project.empty.title")}
+          </Text>
           <Text style={styles.emptyText}>{t("sidebar.project.empty.description")}</Text>
           <Button variant="ghost" size="sm" leftIcon={Plus} onPress={onAddProject}>
             {t("sidebar.actions.addProject")}
@@ -2447,6 +2528,40 @@ const styles = StyleSheet.create((theme) => ({
     marginBottom: theme.spacing[1],
   },
   workspaceListContainer: {},
+  newWorkspaceGhostRow: {
+    minHeight: 32,
+    marginLeft: theme.spacing[6],
+    marginRight: theme.spacing[1],
+    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing[2],
+    borderRadius: theme.borderRadius.md,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing[2],
+    userSelect: "none",
+  },
+  newWorkspaceGhostRowHovered: {
+    backgroundColor: theme.colors.surfaceSidebarHover,
+  },
+  newWorkspaceGhostIconSlot: {
+    width: theme.iconSize.sm,
+    height: theme.iconSize.sm,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  newWorkspaceGhostText: {
+    color: theme.colors.foregroundMuted,
+    fontSize: theme.fontSize.sm,
+    minWidth: 0,
+    flexShrink: 1,
+  },
+  newWorkspaceGhostTextHovered: {
+    fontSize: theme.fontSize.sm,
+    minWidth: 0,
+    flexShrink: 1,
+    color: theme.colors.foreground,
+  },
   emptyContainer: {
     marginHorizontal: theme.spacing[2],
     marginTop: theme.spacing[4],
