@@ -19,6 +19,7 @@ export interface STTConfig {
   apiKey: string;
   baseUrl?: string;
   model?: "whisper-1" | "gpt-4o-transcribe" | "gpt-4o-mini-transcribe" | (string & {});
+  language?: string;
   confidenceThreshold?: number; // Default: -3.0
 }
 
@@ -76,6 +77,7 @@ export class OpenAISTT implements SpeechToTextProvider {
     let previousSegmentId: string | null = null;
     let pcm16: Buffer = Buffer.alloc(0);
     const transcribeAudio = this.transcribeAudioInternal.bind(this);
+    const sttLanguage = params.language ?? this.config.language;
 
     const convertPCMToWavBuffer = (pcmBuffer: Buffer): Buffer => {
       const headerSize = 44;
@@ -143,7 +145,7 @@ export class OpenAISTT implements SpeechToTextProvider {
             const result = await transcribeAudio(
               wav,
               "audio/wav",
-              params.language ?? "en",
+              sttLanguage,
               logger,
               params.prompt,
             );
@@ -184,7 +186,7 @@ export class OpenAISTT implements SpeechToTextProvider {
   private async transcribeAudioInternal(
     audioBuffer: Buffer,
     format: string,
-    language: string,
+    language: string | undefined,
     logger: pino.Logger,
     prompt?: string,
   ): Promise<TranscriptionResult> {
@@ -205,8 +207,8 @@ export class OpenAISTT implements SpeechToTextProvider {
 
       const response = await this.openaiClient.audio.transcriptions.create({
         file: await import("fs").then((fs) => fs.createReadStream(tempFilePath!)),
-        language,
         model: modelToUse,
+        ...(language ? { language } : {}),
         ...(prompt ? { prompt } : {}),
         ...(supportsLogprobs ? { include: includeLogprobs } : {}),
         response_format: "json",

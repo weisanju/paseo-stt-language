@@ -35,6 +35,7 @@ const OpenAiSpeechResolutionSchema = z.object({
   baseUrl: OptionalTrimmedStringSchema,
   sttConfidenceThreshold: OptionalFiniteNumberSchema,
   sttModel: OptionalTrimmedStringSchema,
+  sttLanguage: OptionalTrimmedStringSchema,
   ttsVoice: z.string().trim().toLowerCase().pipe(OpenAiTtsVoiceSchema).default("alloy"),
   ttsModel: z
     .string()
@@ -79,6 +80,11 @@ function buildOpenAiSttInput(params: {
       env.STT_MODEL,
       pickIfOpenAi(providers.voiceStt, persisted.features?.voiceMode?.stt?.model),
       pickIfOpenAi(providers.dictationStt, persisted.features?.dictation?.stt?.model),
+    ]),
+    sttLanguage: firstDefined<string>([
+      env.STT_LANGUAGE,
+      pickIfOpenAi(providers.voiceStt, persisted.features?.voiceMode?.stt?.language),
+      pickIfOpenAi(providers.dictationStt, persisted.features?.dictation?.stt?.language),
     ]),
   };
 }
@@ -147,6 +153,7 @@ export function resolveOpenAiSpeechConfig(params: {
         ? { confidenceThreshold: parsed.sttConfidenceThreshold }
         : {}),
       ...(parsed.sttModel ? { model: parsed.sttModel } : {}),
+      ...(parsed.sttLanguage ? { language: parsed.sttLanguage } : {}),
     },
     tts: {
       apiKey: parsed.apiKey,

@@ -157,4 +157,53 @@ describe("resolveOpenAiSpeechConfig", () => {
     expect(resolved?.apiKey).toBe("env-key");
     expect(resolved?.baseUrl).toBe("https://env.example.com/v1");
   });
+
+  test("language is undefined when no language config is set", () => {
+    const persisted = PersistedConfigSchema.parse({
+      providers: { openai: { apiKey: "sk-test" } },
+    });
+
+    const resolved = resolveOpenAiSpeechConfig({
+      env: {},
+      persisted,
+      providers: {
+        dictationStt: { provider: "openai", explicit: true },
+        voiceStt: { provider: "openai", explicit: true },
+        voiceTts: { provider: "local", explicit: false },
+      },
+    });
+
+    expect(resolved?.stt?.language).toBeUndefined();
+  });
+
+  test("reads stt language from config or env, env wins", () => {
+    const persisted = PersistedConfigSchema.parse({
+      providers: { openai: { apiKey: "sk-test" } },
+      features: {
+        voiceMode: { stt: { provider: "openai", language: "ja" } },
+      },
+    });
+
+    const withoutEnv = resolveOpenAiSpeechConfig({
+      env: {},
+      persisted,
+      providers: {
+        dictationStt: { provider: "local", explicit: false },
+        voiceStt: { provider: "openai", explicit: true },
+        voiceTts: { provider: "local", explicit: false },
+      },
+    });
+    expect(withoutEnv?.stt?.language).toBe("ja");
+
+    const withEnv = resolveOpenAiSpeechConfig({
+      env: { STT_LANGUAGE: "zh" },
+      persisted,
+      providers: {
+        dictationStt: { provider: "local", explicit: false },
+        voiceStt: { provider: "openai", explicit: true },
+        voiceTts: { provider: "local", explicit: false },
+      },
+    });
+    expect(withEnv?.stt?.language).toBe("zh");
+  });
 });
